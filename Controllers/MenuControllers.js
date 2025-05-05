@@ -1,35 +1,43 @@
-const Menu = require("../Model/MenuModel");
+const Menu = require("../Model/MenuModel"); // Adjust the model path as needed
 
-const validateMenuData = (name, description, originalPrice, currentPrice, category) => {
+// Validation function for menu data
+const validateMenuData = (name, description, originalPrice, currentPrice, image, category) => {
   const errors = {};
+
+  // Validate required fields
   if (!name || !name.trim()) errors.name = "Name is required";
   if (!description || !description.trim()) errors.description = "Description is required";
 
-  if (!originalPrice && originalPrice !== 0) {
-    errors.originalPrice = "Original price is required";
-  } else {
-    const priceNum = Number(originalPrice);
-    if (isNaN(priceNum)) errors.originalPrice = "Original price must be a number";
-    else if (priceNum <= 0) errors.originalPrice = "Original price must be greater than 0";
+  // Validate pricing
+  if (originalPrice === undefined || originalPrice === null || isNaN(originalPrice)) {
+    errors.originalPrice = "Original price is required and must be a number";
+  } else if (!isFinite(originalPrice) || originalPrice <= 0) {
+    errors.originalPrice = "Original price must be a positive number";
   }
 
-  if (!currentPrice && currentPrice !== 0) {
-    errors.currentPrice = "Current price is required";
-  } else {
-    const priceNum = Number(currentPrice);
-    if (isNaN(priceNum)) errors.currentPrice = "Current price must be a number";
-    else if (priceNum <= 0) errors.currentPrice = "Current price must be greater than 0";
-    else if (priceNum > Number(originalPrice)) errors.currentPrice = "Current price cannot be higher than original price";
+  if (currentPrice === undefined || currentPrice === null || isNaN(currentPrice)) {
+    errors.currentPrice = "Current price is required and must be a number";
+  } else if (!isFinite(currentPrice) || currentPrice <= 0) {
+    errors.currentPrice = "Current price must be a positive number";
+  } else if (currentPrice > originalPrice) {
+    errors.currentPrice = "Current price cannot be higher than original price";
   }
 
+  // Validate category
   const validCategories = ['pizza', 'burger', 'juice', 'pasta', 'healthy food', 'all'];
   if (!category || !validCategories.includes(category)) {
     errors.category = "Valid category is required (pizza, burger, juice, pasta, healthy food, all)";
   }
 
+  // Validate image (accept both file and url)
+  if (image && typeof image !== 'string') {
+    errors.image = "Image must be a valid URL string";
+  }
+
   return { isValid: Object.keys(errors).length === 0, errors };
 };
 
+// GET all menus with optional filtering by category
 const getAllMenus = async (req, res) => {
   try {
     const { category } = req.query;
@@ -41,6 +49,7 @@ const getAllMenus = async (req, res) => {
   }
 };
 
+// GET menu by ID
 const getMenuById = async (req, res) => {
   try {
     const menu = await Menu.findById(req.params.id);
@@ -53,6 +62,7 @@ const getMenuById = async (req, res) => {
   }
 };
 
+// POST new menu
 const addMenu = async (req, res) => {
   try {
     let { name, description, originalPrice, currentPrice, category } = req.body;
@@ -62,20 +72,27 @@ const addMenu = async (req, res) => {
     currentPrice = parseFloat(currentPrice);
     category = category?.toLowerCase();
 
-    const { isValid, errors } = validateMenuData(name, description, originalPrice, currentPrice, category);
+    // Handle image (file or string)
+    let image = req.body.image;
+    if (req.file) {
+      // Assuming multer is used and file is saved locally or on cloud
+      image = req.file.path || req.file.location; // .location if using S3, .path if local
+    }
+
+    const { isValid, errors } = validateMenuData(name, description, originalPrice, currentPrice, image, category);
     if (!isValid) return res.status(400).json({ success: false, message: "Validation failed", errors });
 
     const isOnSale = currentPrice < originalPrice;
-    const newMenu = new Menu({ name, description, originalPrice, currentPrice, category, isOnSale });
+    const newMenu = new Menu({ name, description, originalPrice, currentPrice, category, image, isOnSale });
     await newMenu.save();
 
     res.status(201).json({ success: true, data: newMenu });
   } catch (err) {
-    console.error("Error during menu creation:", err);
     res.status(500).json({ success: false, message: err.message });
   }
 };
 
+// PUT update menu
 const updateMenu = async (req, res) => {
   try {
     let { name, description, originalPrice, currentPrice, category } = req.body;
@@ -85,7 +102,13 @@ const updateMenu = async (req, res) => {
     currentPrice = parseFloat(currentPrice);
     category = category?.toLowerCase();
 
-    const { isValid, errors } = validateMenuData(name, description, originalPrice, currentPrice, category);
+    // Handle image (file or string)
+    let image = req.body.image;
+    if (req.file) {
+      image = req.file.path || req.file.location;
+    }
+
+    const { isValid, errors } = validateMenuData(name, description, originalPrice, currentPrice, image, category);
     if (!isValid) return res.status(400).json({ success: false, message: "Validation failed", errors });
 
     const existing = await Menu.findById(req.params.id);
@@ -94,7 +117,7 @@ const updateMenu = async (req, res) => {
     const isOnSale = currentPrice < originalPrice;
     const updated = await Menu.findByIdAndUpdate(
       req.params.id,
-      { name, description, originalPrice, currentPrice, category, isOnSale },
+      { name, description, originalPrice, currentPrice, category, image, isOnSale },
       { new: true }
     );
 
@@ -104,6 +127,7 @@ const updateMenu = async (req, res) => {
   }
 };
 
+// DELETE menu
 const deleteMenu = async (req, res) => {
   try {
     const deleted = await Menu.findByIdAndDelete(req.params.id);

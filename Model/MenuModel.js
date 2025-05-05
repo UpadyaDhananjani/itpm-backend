@@ -1,17 +1,19 @@
-const mongoose = require("mongoose");
+// File: models/MenuModel.js
+const mongoose = require('mongoose');
 
-const MenuSchema = new mongoose.Schema({
+const menuSchema = new mongoose.Schema({
   name: { type: String, required: true },
   description: { type: String, required: true },
   originalPrice: { type: Number, required: true },
   currentPrice: { type: Number, required: true },
+  image: { type: String }, // optional image URL
   category: {
     type: String,
     required: true,
     enum: ['pizza', 'burger', 'juice', 'pasta', 'healthy food', 'all'],
     default: 'all'
   },
-  isOnSale: { type: Boolean, default: false }
+  isOnSale: { type: Boolean, default: false },
 }, { timestamps: true });
 
-module.exports = mongoose.model("Menu", MenuSchema);
+module.exports = mongoose.model('Menu', menuSchema);
